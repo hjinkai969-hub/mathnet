@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智慧商品關聯推薦系統 (Discrete Math Recommendation System)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 min-h-screen relative">
+
+  <!-- ⚠️ 超預算提示小視窗 (Budget Alert Modal) -->
+  <div id="budgetAlertModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 border border-slate-100 text-center transform scale-95 transition-transform duration-300 id-modal-card">
+      <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+      </div>
+      <h3 class="text-lg font-bold text-slate-800 mb-1">超過配件單品預算上限</h3>
+      <p id="alertModalMessage" class="text-xs text-slate-600 mb-5 leading-relaxed">
+        該配件金額已超過設定的預算上限。
+      </p>
+      <button onclick="closeBudgetModal()" class="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer">
+        我知道了
+      </button>
+    </div>
+  </div>
+
+  <!-- 💳 結帳視窗 (Checkout Modal) -->
+  <div id="checkoutModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden border border-slate-100 transform scale-95 transition-transform duration-350 checkout-modal-card">
+      <div class="bg-indigo-600 text-white p-5 flex justify-between items-center">
+        <h3 class="text-lg font-bold flex items-center gap-2">
+          <i data-lucide="credit-card"></i> 訂單結算與明細核對
+        </h3>
+        <button onclick="closeCheckoutModal()" class="text-indigo-200 hover:text-white text-xl font-bold cursor-pointer">✕</button>
+      </div>
+      
+      <div class="p-6 space-y-3 max-h-[60vh] overflow-y-auto" id="checkoutItemsContainer">
+        <!-- JS 動態生成結帳清單 -->
+      </div>
+
+      <div class="bg-slate-50 p-5 border-t border-slate-200 space-y-3">
+        <div class="flex justify-between text-sm text-slate-600">
+          <span>商品總筆數：</span>
+          <span id="modalTotalCount" class="font-bold">0 項</span>
+        </div>
+        <div class="flex justify-between items-center pt-2 border-t border-slate-200 text-lg">
+          <span class="font-bold text-slate-800">應付總金額：</span>
+          <span id="modalTotalPrice" class="text-2xl font-extrabold text-indigo-600">NT$ 0</span>
+        </div>
+        <button onclick="confirmOrder()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+          <i data-lucide="check-circle-2"></i> 確認下單結帳
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="bg-indigo-600 text-white py-6 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-bold flex items-center gap-2">
+          <i data-lucide="shopping-bag"></i> 跨領域智慧商品關聯推薦系統
+        </h1>
+        <p class="text-indigo-200 mt-1 text-sm">
+          應用離散數學：100款主商品 × 800款配件矩陣 + 獨立預算防護機制
+        </p>
+      </div>
+      <!-- 右上角購物車圖案與品項按鈕 -->
+      <button onclick="openCheckoutModal()" class="bg-indigo-700 hover:bg-indigo-800 px-4 py-2.5 rounded-xl border border-indigo-500 flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer">
+        <i data-lucide="shopping-cart" class="w-5 h-5 text-amber-300"></i>
+        <span class="text-sm">購物車品項: <strong id="cartCount" class="text-amber-300 font-bold">0</strong> 項</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- 左側：設定與控制區 -->
+    <section class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-6">
+      
+      <!-- 步驟 1: 選擇主要商品 -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+          <i data-lucide="package" class="w-4 h-4 text-indigo-600"></i> 1. 選擇主商品 (跨領域共 100 款)
+        </label>
+        <select id="primaryProductSelect" onchange="onMainProductChange()" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+          <!-- JS 動態生成 -->
+        </select>
+      </div>
+
+      <!-- 步驟 2: 設定預算限制 -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+          <i data-lucide="dollar-sign" class="w-4 h-4 text-indigo-600"></i> 2. 設定配件單品預算上限
+        </label>
+        <div class="flex items-center gap-3">
+          <input type="range" id="budgetRange" min="500" max="100000" step="500" value="100000" oninput="updateBudgetDisplay(); debouncedCalculate();" class="w-full accent-indigo-600">
+          <span id="budgetValue" class="font-bold text-indigo-600 min-w-[90px] text-right">NT$ 30,000</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-1">💡 註：此預算上限僅限制「配件」，主商品金額可獨立自由選擇。</p>
+      </div>
+
+      <!-- 步驟 3: 顯示模式開關 -->
+      <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+        <label class="flex items-center justify-between cursor-pointer">
+          <span class="text-sm font-semibold text-slate-700 flex items-center gap-1">
+            <i data-lucide="eye" class="w-4 h-4 text-indigo-600"></i> 顯示所有配件 (共 800 款)
+          </span>
+          <input type="checkbox" id="showAllToggle" onchange="calculateRecommendations()" class="w-4 h-4 accent-indigo-600 rounded">
+        </label>
+        <p class="text-xs text-slate-400 mt-1">勾選後將載入全部 800 款絕對獨立不重複配件</p>
+      </div>
+
+      <!-- 離散數學理論說明小卡 -->
+      <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 text-xs text-indigo-900 space-y-2">
+        <div class="font-bold text-sm text-indigo-700 border-b border-indigo-200 pb-1 flex items-center gap-1">
+          <i data-lucide="brain-circuit" class="w-4 h-4"></i> 獨立預算與防撞集合
+        </div>
+        <p><strong>• 主商品獨立性:</strong> 主商品定價不受配件預算上限約束。</p>
+        <p><strong>• 全域防撞驗證:</strong> 100 款主商品與 800 款配件名稱及價格 100% 互異。</p>
+      </div>
+
+    </section>
+
+    <!-- 右側：結果展示區 -->
+    <section class="lg:col-span-2 space-y-6">
+      
+      <!-- 主商品資訊卡 -->
+      <div id="mainProductCard" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <!-- JS 動態渲染 -->
+      </div>
+
+      <!-- 推薦配件清單 (虛擬滾動容器) -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="sparkles" class="text-amber-500"></i> 智慧推薦配件 (高效虛擬滾動區)
+          </h2>
+          <span id="recCountBadge" class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">
+            載入中...
+          </span>
+        </div>
+
+        <div id="scrollWindowContainer" onscroll="handleWindowScroll()" class="h-[450px] overflow-y-auto border border-slate-100 rounded-lg p-3 bg-slate-50/50">
+          <div id="recommendationList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- JS 動態渲染 -->
+          </div>
+          <div id="loadingIndicator" class="text-center py-4 text-xs font-bold text-slate-400 hidden">
+            ⏳ 正在載入更多推薦配件...
+          </div>
+        </div>
+      </div>
+
+      <!-- 🛒 購物車結算專區 -->
+      <div class="bg-indigo-900 text-white p-6 rounded-xl shadow-md space-y-4">
+        <div class="flex justify-between items-center border-b border-indigo-800 pb-3">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <i data-lucide="shopping-cart"></i> 我的購物車清單與總金額計算
+          </h2>
+          <button onclick="openCheckoutModal()" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-xs transition flex items-center gap-1 shadow cursor-pointer">
+            <i data-lucide="arrow-right-circle"></i> 前往結帳
+          </button>
+        </div>
+        
+        <div id="cartItemsList" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+          <!-- JS 動態渲染購物車項目 -->
+        </div>
+
+        <div class="flex justify-between items-center pt-4 border-t border-indigo-800 text-lg">
+          <span class="font-medium text-indigo-200">應付總金額 (Total Price):</span>
+          <span id="cartTotalPrice" class="text-2xl font-bold text-amber-400">NT$ 0</span>
+        </div>
+      </div>
+
+      <!-- 關聯矩陣視覺化 -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-md font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <i data-lucide="grid" class="text-indigo-600"></i> 動態加權總分數矩陣表 (前 50 筆高效能預覽)
+        </h2>
+        <div class="overflow-x-auto max-h-80">
+          <table class="w-full text-sm text-left border-collapse">
+            <thead class="sticky top-0 bg-slate-100">
+              <tr class="text-slate-600">
+                <th class="p-2 border">目標配件</th>
+                <th class="p-2 border">價格</th>
+                <th class="p-2 border">主商品關聯</th>
+                <th class="p-2 border">配件加成</th>
+                <th class="p-2 border">綜合分數</th>
+                <th class="p-2 border">預算狀態</th>
+              </tr>
+            </thead>
+            <tbody id="matrixTableBody">
+              <!-- JS 動態渲染 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    // -------------------------------------------------------------
+    // 🎯 精準且多樣化的配件圖示對映引擎 (Smart Icon Matcher)
+    // -------------------------------------------------------------
+    const iconPools = {
+      "3C數碼": ["🖥️", "⌨️", "🖱️", "🎧", "🔊", "💻", "💾", "🔋", "📷", "🎙️", "📡", "🔌", "📱", "🕹️", "💡", "🔍"],
+      "生活家電": ["☕", "🍳", "🧹", "🌀", "💨", "🫖", "🍃", "❄️", "🧺", "🪥", "🧊", "♨️", "🧽", "💡", "⚡"],
+      "戶外露營": ["⛺", "🛌", "🎒", "💡", "🥤", "🔪", "🔦", "🪵", "🧭", "🔥", "🥾", "☂️", "🛶", "🪓", "🪢"],
+      "汽機車百貨": ["🚘", "🛞", "🧽", "🪑", "🛠️", "🔑", "🧯", "🪞", "⛽", "🛜", "🛡️", "🛆", "🧰"],
+      "音樂樂器": ["🎸", "🎹", "🥁", "🎼", "🎷", "🎺", "🎻", "🎤", "🎛️", "📻", "📯", "🎚️"],
+      "運動健身": ["🏃", "🏋️", "🧘", "💆", "🚴", "⚽", "🏀", "🎾", "🥊", "🎽", "🪂", "🛹", "🎯"],
+      "廚房衛浴": ["🔪", "🥘", "🚿", "🛁", "🍽️", "🥄", "🥣", "🥢", "🚰", "🧴", "🧻", "🧼", "🪞"],
+      "攝影影音": ["📷", "📐", "🎥", "🎞️", "📹", "💡", "🔭", "🔬", "🎛️", "🔋", "💼", "🧳"],
+      "辦公文具": ["🏢", "🪑", "💡", "✏️", "📐", "📎", "📌", "✂️", "📁", "🗂️", "📊", "🖨️", "🖊️"],
+      "美妝保健": ["✨", "💄", "💅", "🧴", "🪞", "🪮", "🧼", "🧽", "💊", "🌿", "🌸", "💧"]
+    };
+
+    function getSmartIcon(name, catName, index) {
+      if (name.includes("螢幕") || name.includes("顯示器")) return "🖥️";
+      if (name.includes("鍵盤")) return "⌨️";
+      if (name.includes("滑鼠")) return "🖱️";
+      if (name.includes("耳機")) return "🎧";
+      if (name.includes("喇叭") || name.includes("音響")) return "🔊";
+      if (name.includes("筆電") || name.includes("工作站")) return "💻";
+      if (name.includes("硬碟") || name.includes("記憶卡")) return "💾";
+      if (name.includes("行動電源") || name.includes("快充") || name.includes("電池")) return "🔋";
+      if (name.includes("鏡頭") || name.includes("視訊")) return "📷";
+      if (name.includes("麥克風")) return "🎙️";
+      if (name.includes("路由器") || name.includes("Wi-Fi")) return "📡";
+      if (name.includes("支架") || name.includes("掛燈")) return "💡";
+      if (name.includes("轉接線") || name.includes("集線器")) return "🔌";
+      if (name.includes("保護殼") || name.includes("貼")) return "🛡️";
+
+      if (name.includes("咖啡機")) return "☕";
+      if (name.includes("烤箱") || name.includes("料理爐") || name.includes("微波")) return "🍳";
+      if (name.includes("吸塵器") || name.includes("掃地機")) return "🧹";
+      if (name.includes("電風扇") || name.includes("循環扇")) return "🌀";
+      if (name.includes("吹風機") || name.includes("掛燙機")) return "💨";
+      if (name.includes("熱水壺") || name.includes("淨水器")) return "🫖";
+      if (name.includes("清淨機") || name.includes("除濕")) return "🍃";
+      if (name.includes("冷氣") || name.includes("空調") || name.includes("製冰機")) return "❄️";
+      if (name.includes("洗衣機") || name.includes("乾衣機")) return "🧺";
+      if (name.includes("電動牙刷")) return "🪥";
+      if (name.includes("電子秤")) return "⚖️";
+
+      if (name.includes("帳篷") || name.includes("露營帳") || name.includes("天幕")) return "⛺";
+      if (name.includes("睡袋") || name.includes("睡墊")) return "🛌";
+      if (name.includes("登山杖") || name.includes("背包")) return "🎒";
+      if (name.includes("燈") || name.includes("頭燈") || name.includes("氛圍燈")) return "💡";
+      if (name.includes("水杯") || name.includes("濾水") || name.includes("太空瓶")) return "🥤";
+      if (name.includes("求生刀") || name.includes("圓鍬")) return "🔪";
+      if (name.includes("瓦斯爐") || name.includes("焚火架")) return "🔥";
+
+      if (name.includes("行車記錄") || name.includes("導航")) return "🚘";
+      if (name.includes("胎壓")) return "🛞";
+      if (name.includes("鍍膜") || name.includes("洗車")) return "🧽";
+      if (name.includes("方向盤") || name.includes("椅套") || name.includes("腰靠")) return "🪑";
+      if (name.includes("安全錘") || name.includes("三角錐")) return "⚠️";
+
+      if (name.includes("吉他") || name.includes("撥片")) return "🎸";
+      if (name.includes("鋼琴") || name.includes("電子琴")) return "🎹";
+      if (name.includes("爵士鼓")) return "🥁";
+      if (name.includes("節拍器") || name.includes("調音器") || name.includes("譜架")) return "🎼";
+      if (name.includes("導線") || name.includes("效果器")) return "🔌";
+
+      if (name.includes("跑步機") || name.includes("健身車")) return "🏃";
+      if (name.includes("啞鈴") || name.includes("重訓") || name.includes("壺鈴")) return "🏋️";
+      if (name.includes("瑜珈墊") || name.includes("抗力球")) return "🧘";
+      if (name.includes("按摩槍") || name.includes("筋膜")) return "💆";
+      if (name.includes("跳繩") || name.includes("拉力繩")) return "🎯";
+
+      if (name.includes("菜刀") || name.includes("砧板") || name.includes("刨絲器")) return "🔪";
+      if (name.includes("鍋") || name.includes("IH爐")) return "🥘";
+      if (name.includes("蓮蓬頭") || name.includes("浴缸") || name.includes("衛浴") || name.includes("給皂機")) return "🚿";
+      if (name.includes("地墊") || name.includes("毛巾")) return "🧼";
+
+      if (name.includes("相機") || name.includes("攝影機")) return "📷";
+      if (name.includes("腳架") || name.includes("雲台")) return "📐";
+      if (name.includes("防潮箱") || name.includes("背包")) return "💼";
+      if (name.includes("補光燈") || name.includes("柔光罩")) return "💡";
+
+      if (name.includes("升降桌") || name.includes("辦公桌")) return "🏢";
+      if (name.includes("辦公椅") || name.includes("電腦椅")) return "🪑";
+      if (name.includes("檯燈")) return "💡";
+      if (name.includes("筆") || name.includes("計算機") || name.includes("剪刀")) return "✏️";
+      if (name.includes("碎紙機") || name.includes("打孔機")) return "🖨️";
+
+      if (name.includes("美膚艙") || name.includes("SPA") || name.includes("美容")) return "✨";
+      if (name.includes("化妝") || name.includes("美顏") || name.includes("香水")) return "💄";
+      if (name.includes("洗臉") || name.includes("護膚")) return "🧴";
+
+      const pool = iconPools[catName] || ["📦", "🏷️", "⭐", "💎"];
+      return pool[index % pool.length];
+    }
+
+    // -------------------------------------------------------------
+    // 1. 10大跨領域商品矩陣資料庫
+    // -------------------------------------------------------------
+    const categoryData = [
+      {
+        name: "3C數碼", img: "💻",
+        mainModels: ["極光旗艦電競筆電", "全能創作者雙螢幕主機", "頂規商務行動工作站", "次世代光追桌機", "OLED 觸控變形筆電", "極致輕薄行動超極本", "全金屬創作者桌機", "沉浸式VR旗艦主機", "AI 深度學習工作站", "極速效能電競主機"],
+        mainBrands: ["ROG 玩家共和國", "Logitech G", "Razer 雷蛇", "Corsair 海盜船", "MSI 微星", "Apple 蘋果", "Samsung 三星", "Sony 索尼", "Dell 戴爾", "ASUS 華碩"],
+        brands: ["ROG", "Logitech", "Razer", "Corsair", "MSI", "Apple", "Samsung", "Sony", "Dell", "ASUS", "HyperX", "JBL", "Anker", "Belkin", "CalDigit"],
+        specs: ["27吋 4K", "RGB 機械", "三模無線", "主動降噪", "10合1", "磁吸金屬", "高速行動", "25000mAh", "智慧自動", "多平台藍牙", "極速電競", "超薄便攜", "專業創作者", "軍規防摔", "旗艦特仕"],
+        cores: ["電競螢幕", "青軸鍵盤", "電競滑鼠", "藍牙耳機", "Type-C集線器", "筆電支架", "外接固態硬碟", "雙向快充行動電源", "螢幕掛燈", "無線遊戲手把", "環繞藍牙喇叭", "專業繪圖板", "Wi-Fi 7路由器", "水冷散熱器", "高速記憶卡", "4K視訊鏡頭", "編織轉接線", "防摔保護殼", "抗藍光貼", "指向性麥克風"]
+      },
+      {
+        name: "生活家電", img: "☕",
+        mainModels: ["旗艦智慧聯網冷氣機", "全自動頂級洗脫烘滾筒洗衣機", "AI 智慧雙迴路對開冰箱", "極智感應美型變頻洗衣機", "日本原裝多門極鮮冷藏櫃", "全能蒸烘洗碗機旗艦款", "頂級智慧滾筒洗脫烘", "旗艦變頻冷暖空調機", "全自動智慧溫控乾衣機", "高階智能冷藏保鮮冰箱"],
+        mainBrands: ["Dyson 戴森", "BALMUDA 巴慕達", "IRIS 歐愛麗", "BRUNO 美型", "DeLonghi 迪朗奇", "Panasonic 國際牌", "HITACHI 日立", "PHILIPS 飛利浦", "SHARP 夏普", "TOSHIBA 東芝"],
+        brands: ["Dyson", "BALMUDA", "IRIS", "BRUNO", "DeLonghi", "Panasonic", "HITACHI", "PHILIPS", "SHARP", "TOSHIBA", "Zojirushi", "Tiger", "Braun", "Ecovacs", "Roborock"],
+        specs: ["智慧自動", "日系美型", "無線手持", "循環極靜音", "負離子高速", "智能恆溫", "多功能全自動", "UV紫外線", "桌上型迷你", "超音波香氛", "雙重過濾", "節能省電", "極速加熱", "殺菌烘乾", "負離子淨化"],
+        cores: ["義式咖啡機", "蒸氣烤箱", "無線吸塵器", "立式電風扇", "美髮吹風機", "恆溫電熱水壺", "製冰機", "烘鞋除菌機", "空氣清淨機", "加濕香氛機", "除濕乾燥機", "微波料理爐", "全營養果汁機", "音波電動牙刷", "智慧掃地機", "料理電子秤", "光觸媒捕蚊燈", "陶瓷電暖器", "手持掛燙機", "櫥下淨水器"]
+      },
+      {
+        name: "戶外露營", img: "⛺",
+        mainModels: ["專業極地四季高山帳篷", "豪華車宿露營越野拖車", "頂級全天候隧道式露營帳", "多功能自動速開別墅帳", "極地防寒高規露營車屋", "全鋁合金輕量露營拖車", "豪華四季家庭式露營帳", "高山極地重裝抗風帳篷", "專業戶外露營遮陽大天幕", "頂級多功能車泊露營帳"],
+        mainBrands: ["Snow Peak", "Coleman 柯曼", "Thule 都樂", "Black Diamond", "Nordisk 北歐", "Logos 樂高士", "Naturehike 挪客", "KZM 戶外", "Helinox 輕量", "MSR 極地"],
+        brands: ["Snow Peak", "Coleman", "Thule", "Black Diamond", "Nordisk", "Logos", "Naturehike", "KZM", "Helinox", "MSR", "Petzl", "GSI", "Osprey", "Patagonia", "Columbia"],
+        specs: ["輕量化鈦金", "荷蘭鑄鐵", "高亮度 LED", "一房一廳", "鋁合金摺疊", "高密度發泡", "便攜戶外", "大容量保溫", "防水防潮", "多功能工兵", "極地防寒", "防風抗UV", "快乾透氣", "超輕量", "重裝防護"],
+        cores: ["雙層登山杯", "鍋具組", "露營氛圍燈", "露營帳篷", "蛋捲桌", "隔音睡墊", "瓦斯爐", "冰桶保溫箱", "防潮野餐墊", "摺疊圓鍬", "羽絨睡袋", "天幕遮陽帳", "碳纖維登山杖", "鋁合金折疊椅", "焚火架", "強光頭燈", "多功能求生刀", "戶外濾水器", "急救醫療包", "強力掛繩組"]
+      },
+      {
+        name: "汽機車百貨", img: "🚗",
+        mainModels: ["智慧 AI 全景環景導航系統", "頂級車載娛樂影音中控主機", "旗艦級前後雙錄行車紀錄器", "車用智慧 AI 語音控制主機", "全功能車聯網行車安全系統", "頂規車載無線多媒體中控台", "智慧型車用防盜安全中心", "極速車載導航影音娛樂系統", "車用頂級環景影像行車系統", "旗艦車用智慧互聯中控主機"],
+        mainBrands: ["Garmin 佳明", "Mio 宇達電通", "70mai 七十邁", "BASEUS 倍思", "3M 車用", "SONAX 德國", "SHARK 鯊魚", "BLACK+DECKER", "Bridgestone", "Michelin 輪胎"],
+        brands: ["Garmin", "Mio", "70mai", "BASEUS", "3M", "SONAX", "SHARK", "BLACK+DECKER", "Bridgestone", "Michelin", "Bosch", "Hella", "Pioneer", "Alpine", "Meguiar's"],
+        specs: ["高清夜視", "磁吸無線", "車用多功能", "奈米防潑水", "重低音車載", "胎壓偵測", "車用救援", "人體工學腰靠", "超強吸力", "LED矩陣", "極速快充", "環景顯影", "抗UV隔熱", "防撞緩衝", "全天候防護"],
+        cores: ["行車記錄器", "手機導航架", "負離子空氣清淨機", "車身鍍膜組", "藍牙喇叭音響", "胎壓偵測器", "行動電源啟動器", "車用腰靠墊", "手持吸塵器", "車室氣氛燈", "真皮方向盤套", "椅背收納袋", "磁吸遮陽簾", "車用安全錘", "智慧點菸器", "天然香氛罐", "全包覆椅套", "應急三角錐", "超細纖維洗車巾", "數位胎壓計"]
+      },
+      {
+        name: "音樂樂器", img: "🎸",
+        mainModels: ["頂級專業演奏級平台鋼琴", "手工特製全單板木吉他", "旗艦級 88 鍵數位電鋼琴", "專業錄音室立式演奏鋼琴", "頂級手工電吉他旗艦款", "演奏級桃花心木民謠吉他", "旗艦級專業舞台電子琴", "手工特製頂級古典吉他", "專業錄音室旗艦電鋼琴", "大師級演奏用平台鋼琴"],
+        mainBrands: ["Yamaha 山葉", "Fender 芬達", "Gibson 吉布森", "Roland 羅蘭", "Korg 科音", "Boss 效果器", "Shure 舒爾", "Sennheiser 森海", "Martin 馬丁", "Ibanez 依班斯"],
+        brands: ["Yamaha", "Fender", "Gibson", "Roland", "Korg", "Boss", "Shure", "Sennheiser", "Martin", "Ibanez", "Epiphone", "Taylor", "Zildjian", "Pearl", "Audio-Technica"],
+        specs: ["桃花心木", "專業導線", "多功能數位", "吉他專用", "錄音室專業", "耳罩監聽", "實木調音", "防潮電子", "金屬保養", "可攜式譜架", "手工特製", "舞台專用", "錄音級", "低延遲", "發燒友級"],
+        cores: ["移調夾", "樂器導線", "節拍器", "壁掛架", "防噴罩", "監聽耳機", "調音器", "琴箱保護套", "潤滑保養組", "折疊琴譜架", "真皮吉他背帶", "綜合效果器", "琴頭收納包", "琴頸支架", "木吉他撥片盒", "爵士鼓地毯", "導線魔鬼氈", "節奏訓練機", "升降鋼琴椅", "樂器吹嘴刷"]
+      },
+      {
+        name: "運動健身", img: "🏋️",
+        mainModels: ["商用級多功能智慧跑步機", "重訓室旗艦綜合訓練機", "全功能專業商用橢圓機", "頂級智慧磁控健身車", "多功能重訓綜合力量站", "商用旗艦級電動跑步機", "全方位智慧交叉訓練機", "頂規商用重訓深蹲架組", "專業多功能有氧健身車", "旗艦級商用綜合訓練台"],
+        mainBrands: ["Nike 耐吉", "Under Armour", "Adidas 愛迪達", "Decathlon 迪卡儂", "TriggerPoint", "Theragun 按摩槍", "Bowflex", "Manduka 曼朱卡", "Reebok", "PUMA 運動"],
+        brands: ["Nike", "Under Armour", "Adidas", "Decathlon", "TriggerPoint", "Theragun", "Bowflex", "Manduka", "Reebok", "PUMA", "Garmin", "Fitbit", "Speedo", "Arena", "Wilson"],
+        specs: ["專業高密度", "可調重力", "防滑舉重", "高彈力乳膠", "智慧計數", "大容量運動", "筋膜深層", "多功能懸吊", "核心訓練", "運動防護", "極速燃脂", "吸濕排汗", "人體工學", "無重力", "強力支撐"],
+        cores: ["瑜珈墊", "啞鈴組合", "舉重訓練手套", "阻力訓練帶", "跳繩", "太空瓶", "按摩槍", "懸吊訓練帶", "健腹輪", "護膝套", "韻律抗力球", "門上引體向上桿", "多功能壺鈴", "運動吸汗毛巾", "核心滑盤", "拳擊手靶", "深層筋膜球", "專業握力器", "彈力拉力繩", "瘦身呼啦圈"]
+      },
+      {
+        name: "廚房衛浴", img: "🍳",
+        mainModels: ["歐式智慧嵌入式蒸烤爐", "頂級智慧恆溫按摩浴缸", "全功能旗艦洗碗烘碗機", "智慧感應控溫抽油煙機", "頂規智能雙口IH爐具", "歐系美型嵌入式烘焙烤箱", "豪華多功能按摩淋浴柱", "全自動智慧控溫洗碗機", "頂級雙口智慧IH電磁爐", "旗艦嵌入式蒸氣料理爐"],
+        mainBrands: ["Zwilling 雙人", "T-fal 特福", "Le Creuset", "WMF 德國", "OXO 好好用", "KOHLER 科勒", "TOTO 衛浴", "HCG 和成", "Lock&Lock", "Thermos 膳魔師"],
+        brands: ["Zwilling", "T-fal", "Le Creuset", "WMF", "OXO", "KOHLER", "TOTO", "HCG", "Lock&Lock", "Thermos", "Tiger", "Britta", "Cuisinart", "KitchenAid", "Emile Henry"],
+        specs: ["職人手工", "不沾陶瓷", "食品級矽膠", "多功能料理", "不鏽鋼雙層", "自動感應", "強力吸盤", "北歐風陶瓷", "防滑吸水", "節水省水", "抗菌防霉", "真空保溫", "高效過濾", "耐熱防爆", "極簡美學"],
+        cores: ["菜刀組", "平底鍋", "耐熱鍋鏟", "料理電子秤", "保鮮盒組", "給皂機", "吹風機架", "衛浴五件套", "吸水地墊", "蓮蓬頭", "調味收納罐", "水槽瀝水籃", "天然木砧板", "多功能刨絲器", "真空保溫瓶", "磁吸牙刷架", "無死角馬桶刷", "毛巾置物桿", "水槽濾網", "智慧烘碗架"]
+      },
+      {
+        name: "攝影影音", img: "📷",
+        mainModels: ["全片幅旗艦數位單眼相機", "專業 8K 電影級攝影機", "中片幅頂規專業攝影機", "旗艦無反光鏡數位相機", "專業廣電級 4K 攝影機", "全片幅無反旗艦攝影機", "頂級電影級數位攝錄影機", "專業數位單眼旗艦相機", "廣播級 4K 數位攝影機", "全片幅頂規無反相機"],
+        mainBrands: ["Manfrotto 曼富圖", "Gitzo 捷信", "Benro 百諾", "Peak Design", "Lowepro 樂攝寶", "Rode 羅德", "DJI 大疆", "Godox 神牛", "Sandisk 閃迪", "PolarPro"],
+        brands: ["Manfrotto", "Gitzo", "Benro", "Peak Design", "Lowepro", "Rode", "DJI", "Godox", "Sandisk", "PolarPro", "SmallRig", "Zhiyun", "Atomos", "Nisi", "Kenko"],
+        specs: ["碳纖維輕量", "專業防潮", "V90高速", "環形補光", "減光濾鏡", "無線領夾", "攝影師專用", "快速拆裝", "三軸穩定", "鏡頭清潔", "電影級", "大光圈", "超廣角", "防手震", "旗艦級"],
+        cores: ["三腳架", "電子防潮箱", "記憶卡", "補光燈", "鏡片組", "麥克風", "後背包", "背帶組", "雲台", "清潔組", "反光板組", "攝影棚燈", "電子快門線", "相機內膽包", "柔光罩", "微距鏡片", "熱靴水平儀", "鋰電池", "雙槽充電器", "減壓背帶"]
+      },
+      {
+        name: "辦公文具", img: "✏️",
+        mainModels: ["頂級人體工學電動升降桌", "德國精工主管真皮辦公椅", "旗艦級人體工學辦公椅", "全功能智慧電動升降辦公桌", "頂規人體工學網布主管椅", "商務旗艦電動升降工作桌", "頂級主管專用真皮辦公椅", "全功能人體工學電腦椅", "旗艦商務電動升降辦公桌", "頂級人體工學網椅系列"],
+        mainBrands: ["3M 辦公", "Kokuyo 國譽", "Pentel 派通", "Muji 無印", "Brother 兄弟", "Dahle 德勒", "Faber-Castell", "Pilot 百樂", "Staedtler 施德樓", "Zebra 斑馬"],
+        brands: ["3M", "Kokuyo", "Pentel", "Muji", "Brother", "Dahle", "Faber-Castell", "Pilot", "Staedtler", "Zebra", "Parker", "Waterman", "Moleskine", "Leuchtturm1917", "Rhodia"],
+        specs: ["磁吸桌面整線", "多功能筆筒", "人體工學護腕", "LED護眼", "無線簡報", "萬用轉接", "精美皮革", "精密螺絲起", "強力磁鐵", "檔案收納", "高效省力", "極簡風", "商務專用", "防偽防盜", "環保再生"],
+        cores: ["理線器", "收納盒", "滑鼠墊", "檯燈", "簡報筆", "轉接頭", "桌墊", "螺絲起子組", "白板", "公事包", "省力訂書機", "不鏽鋼剪刀", "多功能美工刀", "膠帶切割台", "公文夾", "便利貼", "按壓簽字筆", "商用計算機", "自動碎紙機", "電動打孔機"]
+      },
+      {
+        name: "美妝保健", img: "💄",
+        mainModels: ["頂級智慧光療美膚艙", "專業負離子水護髮養生艙", "全方位智慧美顏抗老艙", "旗艦級光子嫩膚美容艙", "頂規頭皮養護水療SPA機", "全能智慧無瑕美肌美膚艙", "頂級負離子活氧美顏艙", "旗艦級光療養生美膚機", "專業智慧水氧抗老美顏艙", "頂規負離子頭皮養護艙"],
+        mainBrands: ["Panasonic 美容", "Refa 日本", "Foreo 瑞典", "Braun 德國", "Philips 美容", "Innisfree", "Shiseido 資生堂", "Lancome 蘭蔻", "Estee Lauder", "DHC 保健"],
+        brands: ["Panasonic", "Refa", "Foreo", "Braun", "Philips", "Innisfree", "Shiseido", "Lancome", "Estee Lauder", "DHC", "Kose", "Clinique", "Clarins", "L'occitane", "Aesop"],
+        specs: ["LED智能", "大容量化妝", "負離子直捲", "電動美甲", "超音波洗臉", "隨身香水", "旅行收納", "草本精油", "保濕奈米", "竹炭溫感", "深層修護", "無瑕透亮", "植萃舒緩", "極效抗老", "微導循環"],
+        cores: ["化妝鏡", "收納盒", "美髮梳", "修護器", "洗臉刷", "分裝瓶", "盥洗包", "滾珠瓶", "蒸臉機", "眼罩", "氣墊粉撲", "修眉刀組", "黑頭拔除儀", "光療美甲燈", "身體潤膚乳", "護手霜", "隨身維他命盒", "刮痧按摩板", "頭皮按摩梳", "造型髮夾組"]
+      }
+    ];
+
+    const mainProducts = [];
+    const accessories = [];
+    const usedMainNamesSet = new Set();
+    const usedMainPricesSet = new Set();
+    const usedNamesSet = new Set();
+    const usedPricesSet = new Set();
+
+    // 1. 生成 100 款主商品
+    let mainIndex = 1;
+    for (let catId = 0; catId < categoryData.length; catId++) {
+      const cat = categoryData[catId];
+      for (let k = 0; k < 10; k++) {
+        let mainName = "";
+        let attempt = 0;
+
+        do {
+          const model = cat.mainModels[k];
+          const brand = cat.mainBrands[(k + attempt * 3) % cat.mainBrands.length];
+          mainName = `${brand}｜${model}${attempt > 0 ? ` [V${attempt + 1}]` : ''}`;
+          attempt++;
+        } while (usedMainNamesSet.has(mainName));
+
+        usedMainNamesSet.add(mainName);
+
+        let mainPrice = 12000 + (mainIndex * 431) + ((mainIndex * 79) % 15000);
+        while (usedMainPricesSet.has(mainPrice)) {
+          mainPrice += 17;
+        }
+        usedMainPricesSet.add(mainPrice);
+
+        mainProducts.push({
+          id: `P${String(mainIndex).padStart(3, '0')}`,
+          name: mainName,
+          price: mainPrice,
+          catId: catId,
+          img: getSmartIcon(mainName, cat.name, mainIndex)
+        });
+        mainIndex++;
+      }
+    }
+
+    // 2. 生成 800 款配件
+    let globalIndex = 1;
+    for (let catId = 0; catId < categoryData.length; catId++) {
+      const cat = categoryData[catId];
+      for (let k = 0; k < 80; k++) {
+        let nameCandidate = "";
+        let attempt = 0;
+
+        do {
+          const b = cat.brands[(k + attempt * 7) % cat.brands.length];
+          const s = cat.specs[(k + attempt * 13) % cat.specs.length];
+          const c = cat.cores[(k + attempt * 19) % cat.cores.length];
+          nameCandidate = `${b}｜${s} ${c}${attempt > 0 ? ` (${attempt + 1})` : ''}`;
+          attempt++;
+        } while (usedNamesSet.has(nameCandidate));
+
+        usedNamesSet.add(nameCandidate);
+
+        let priceCandidate = 350 + (globalIndex * 41) + ((globalIndex * 109) % 28500);
+        while (usedPricesSet.has(priceCandidate)) {
+          priceCandidate += 13;
+        }
+        usedPricesSet.add(priceCandidate);
+
+        accessories.push({
+          id: `A${String(globalIndex).padStart(4, '0')}`,
+          name: nameCandidate,
+          price: priceCandidate,
+          catId: catId,
+          img: getSmartIcon(nameCandidate, cat.name, globalIndex)
+        });
+
+        globalIndex++;
+      }
+    }
+
+    // O(1) 雜湊快取矩陣表
+    const weightCache = {};
+    function initHashCache() {
+      mainProducts.forEach(main => {
+        weightCache[main.id] = {};
+        accessories.forEach(acc => {
+          let score = 1;
+          if (main.catId === acc.catId) {
+            score = 7 + ((parseInt(main.id.slice(1)) + parseInt(acc.id.slice(1))) % 4);
+          } else if (Math.abs(main.catId - acc.catId) === 1) {
+            score = 3 + ((parseInt(main.id.slice(1)) * parseInt(acc.id.slice(1))) % 4);
+          }
+          weightCache[main.id][acc.id] = score;
+        });
+      });
+    }
+
+    let cart = [];
+    let filteredListCache = [];
+    let renderCount = 20;
+    let isBatchLoading = false;
+    let debounceTimer = null;
+
+    function debouncedCalculate() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        calculateRecommendations();
+      }, 150);
+    }
+
+    window.onload = function() {
+      initHashCache();
+
+      const select = document.getElementById("primaryProductSelect");
+      mainProducts.forEach(p => {
+        const option = document.createElement("option");
+        option.value = p.id;
+        option.innerText = `${p.img} ${p.name} (NT$ ${p.price.toLocaleString()})`;
+        select.appendChild(option);
+      });
+
+      onMainProductChange();
+    };
+
+    function updateBudgetDisplay() {
+      const budget = document.getElementById("budgetRange").value;
+      document.getElementById("budgetValue").innerText = `NT$ ${parseInt(budget).toLocaleString()}`;
+    }
+
+    // 超預算提示小視窗邏輯 (僅針對配件)
+    function openBudgetModal(productName, productPrice, currentBudget) {
+      const modal = document.getElementById("budgetAlertModal");
+      const msg = document.getElementById("alertModalMessage");
+      msg.innerHTML = `配件「<strong>${productName}</strong>」金額為 <span class="text-rose-600 font-bold">NT$ ${productPrice.toLocaleString()}</span>，已超過設定的配件預算上限 <span class="text-indigo-600 font-bold">NT$ ${currentBudget.toLocaleString()}</span>！`;
+      
+      modal.classList.remove("opacity-0", "pointer-events-none");
+      modal.querySelector(".id-modal-card").classList.remove("scale-95");
+      modal.querySelector(".id-modal-card").classList.add("scale-100");
+    }
+
+    function closeBudgetModal() {
+      const modal = document.getElementById("budgetAlertModal");
+      modal.classList.add("opacity-0", "pointer-events-none");
+      modal.querySelector(".id-modal-card").classList.remove("scale-100");
+      modal.querySelector(".id-modal-card").classList.add("scale-95");
+    }
+
+    function onMainProductChange() {
+      const selectedMainId = document.getElementById("primaryProductSelect").value;
+      const mainProduct = mainProducts.find(p => p.id === selectedMainId);
+
+      // 主商品直接加入購物車（不受配件預算限制）
+      const mainCard = document.getElementById("mainProductCard");
+      mainCard.innerHTML = `
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center text-3xl shadow-inner">
+            ${mainProduct.img}
+          </div>
+          <div>
+            <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">當前選擇主商品 (獨立定價)</span>
+            <h3 class="text-base font-bold text-slate-800 mt-1">${mainProduct.name}</h3>
+            <p class="text-sm font-extrabold text-indigo-600">NT$ ${mainProduct.price.toLocaleString()}</p>
+          </div>
+        </div>
+      `;
+
+      cart = cart.filter(item => item.category !== "Main");
+      cart.unshift({ ...mainProduct, category: "Main" });
+
+      calculateRecommendations();
+      updateCartDisplay();
+    }
+
+    function toggleCart(productId) {
+      const product = accessories.find(p => p.id === productId);
+      const budget = parseInt(document.getElementById("budgetRange").value);
+      const existingIndex = cart.findIndex(item => item.id === productId);
+
+      if (existingIndex > -1) {
+        cart.splice(existingIndex, 1);
+      } else {
+        // 只有配件才受預算限制檢查
+        if (product.price > budget) {
+          openBudgetModal(product.name, product.price, budget);
+          return;
+        }
+        cart.push({ ...product, category: "Accessory" });
+      }
+
+      calculateRecommendations();
+      updateCartDisplay();
+    }
+
+    function updateCartDisplay() {
+      const cartContainer = document.getElementById("cartItemsList");
+      const cartCountEl = document.getElementById("cartCount");
+      const totalPriceEl = document.getElementById("cartTotalPrice");
+
+      cartContainer.innerHTML = "";
+      cartCountEl.innerText = cart.length;
+
+      let totalSum = 0;
+
+      cart.forEach(item => {
+        totalSum += item.price;
+        const isMain = item.category === "Main";
+        
+        cartContainer.innerHTML += `
+          <div class="flex justify-between items-center bg-indigo-800/60 px-3 py-2 rounded-lg text-sm">
+            <div class="flex items-center gap-2">
+              <span>${item.img}</span>
+              <span>${item.name}</span>
+              ${isMain ? '<span class="text-xs bg-indigo-500 px-1.5 py-0.5 rounded">主商品</span>' : '<span class="text-xs bg-emerald-600 px-1.5 py-0.5 rounded">配件</span>'}
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-semibold">NT$ ${item.price.toLocaleString()}</span>
+              ${!isMain ? `<button onclick="toggleCart('${item.id}')" class="text-rose-300 hover:text-rose-100 text-xs cursor-pointer">✕ 移除</button>` : ''}
+            </div>
+          </div>
+        `;
+      });
+
+      if (cart.length === 0) {
+        cartContainer.innerHTML = `<p class="text-indigo-300 text-sm text-center py-2">購物車目前是空的</p>`;
+      }
+
+      totalPriceEl.innerText = `NT$ ${totalSum.toLocaleString()}`;
+    }
+
+    // -------------------------------------------------------------
+    // 2. 💳 結帳視窗 (Modal) 邏輯
+    // -------------------------------------------------------------
+    function openCheckoutModal() {
+      const modal = document.getElementById("checkoutModal");
+      const container = document.getElementById("checkoutItemsContainer");
+      const totalCountEl = document.getElementById("modalTotalCount");
+      const totalPriceEl = document.getElementById("modalTotalPrice");
+
+      container.innerHTML = "";
+      let totalSum = 0;
+
+      cart.forEach(item => {
+        totalSum += item.price;
+        const isMain = item.category === "Main";
+        container.innerHTML += `
+          <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">${item.img}</span>
+              <div>
+                <h4 class="font-bold text-slate-800 text-sm">${item.name}</h4>
+                <span class="text-xs text-slate-500">${isMain ? '主要商品 (自由定價)' : '智慧配件'}</span>
+              </div>
+            </div>
+            <span class="font-bold text-indigo-600">NT$ ${item.price.toLocaleString()}</span>
+          </div>
+        `;
+      });
+
+      if (cart.length === 0) {
+        container.innerHTML = `<p class="text-center py-8 text-slate-400">購物車內無任何商品。</p>`;
+      }
+
+      totalCountEl.innerText = `${cart.length} 項`;
+      totalPriceEl.innerText = `NT$ ${totalSum.toLocaleString()}`;
+
+      modal.classList.remove("opacity-0", "pointer-events-none");
+      modal.querySelector(".checkout-modal-card").classList.remove("scale-95");
+      modal.querySelector(".checkout-modal-card").classList.add("scale-100");
+    }
+
+    function closeCheckoutModal() {
+      const modal = document.getElementById("checkoutModal");
+      modal.classList.add("opacity-0", "pointer-events-none");
+      modal.querySelector(".checkout-modal-card").classList.remove("scale-100");
+      modal.querySelector(".checkout-modal-card").classList.add("scale-95");
+    }
+
+    function confirmOrder() {
+      if (cart.length === 0) {
+        alert("購物車是空的，無法結帳！");
+        return;
+      }
+      alert("🎉 感謝您的購買！訂單已成功建立。");
+      closeCheckoutModal();
+    }
+
+    // -------------------------------------------------------------
+    // 3. 核心運算與可視區動態載入
+    // -------------------------------------------------------------
+    function calculateRecommendations() {
+      const selectedMainId = document.getElementById("primaryProductSelect").value;
+      const budget = parseInt(document.getElementById("budgetRange").value);
+      const showAll = document.getElementById("showAllToggle").checked;
+      
+      const mainProduct = mainProducts.find(p => p.id === selectedMainId);
+      const cartAccessories = cart.filter(item => item.category === "Accessory");
+      const mainWeights = weightCache[selectedMainId];
+
+      const processedList = accessories.map(acc => {
+        const baseWeight = mainWeights[acc.id] || 1;
+        let accBoost = 0;
+        cartAccessories.forEach(cAcc => {
+          if (cAcc.catId === acc.catId) accBoost += 2;
+        });
+
+        const totalWeight = baseWeight + accBoost;
+        const fitsBudget = acc.price <= budget;
+        const isRecommended = fitsBudget && (showAll || totalWeight >= 7);
+        const isInCart = cart.some(item => item.id === acc.id);
+        
+        return { ...acc, baseWeight, accBoost, totalWeight, fitsBudget, isRecommended, isInCart };
+      });
+
+      processedList.sort((a, b) => b.totalWeight - a.totalWeight);
+
+      filteredListCache = showAll ? processedList : processedList.filter(item => item.isRecommended);
+      renderCount = 20;
+
+      document.getElementById("recCountBadge").innerText = `已顯示 ${Math.min(renderCount, filteredListCache.length)} / 共 ${filteredListCache.length} 項`;
+      document.getElementById("scrollWindowContainer").scrollTop = 0;
+
+      renderWindowItems();
+      renderMatrixTable(processedList);
+    }
+
+    function handleWindowScroll() {
+      const container = document.getElementById("scrollWindowContainer");
+      
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 60) {
+        if (renderCount < filteredListCache.length && !isBatchLoading) {
+          isBatchLoading = true;
+          document.getElementById("loadingIndicator").classList.remove("hidden");
+
+          setTimeout(() => {
+            renderCount += 20;
+            renderWindowItems();
+            document.getElementById("recCountBadge").innerText = `已顯示 ${Math.min(renderCount, filteredListCache.length)} / 共 ${filteredListCache.length} 項`;
+            document.getElementById("loadingIndicator").classList.add("hidden");
+            isBatchLoading = false;
+          }, 80);
+        }
+      }
+    }
+
+    function renderWindowItems() {
+      const recContainer = document.getElementById("recommendationList");
+      const currentItems = filteredListCache.slice(0, renderCount);
+
+      recContainer.innerHTML = "";
+
+      if (currentItems.length === 0) {
+        recContainer.innerHTML = `
+          <div class="col-span-2 text-center py-12 text-slate-400">
+            <p>目前預算與條件下沒有符合的配件。</p>
+          </div>`;
+        return;
+      }
+
+      currentItems.forEach(item => {
+        const isOverBudget = !item.fitsBudget;
+        let btnText = item.isInCart ? "已加入購物車 ✓" : "+ 加入購物車";
+        let btnClass = item.isInCart 
+          ? "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" 
+          : "bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer";
+
+        if (isOverBudget) {
+          btnText = "超過預算 ✕ (點擊檢視)";
+          btnClass = "bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-300 font-bold cursor-pointer";
+        }
+
+        const boostTag = item.accBoost > 0 
+          ? `<span class="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold">+${item.accBoost} 加成</span>` 
+          : '';
+
+        recContainer.innerHTML += `
+          <div class="border ${isOverBudget ? 'border-rose-200 bg-rose-50/40' : item.accBoost > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 bg-white'} rounded-lg p-3 hover:border-indigo-300 transition shadow-sm flex flex-col justify-between gap-2">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">${item.img}</span>
+                <div>
+                  <h4 class="font-bold text-slate-800 text-xs flex items-center gap-1">
+                    ${item.name} ${boostTag}
+                  </h4>
+                  <p class="${isOverBudget ? 'text-rose-600 font-extrabold' : 'text-indigo-600 font-bold'} text-xs">
+                    NT$ ${item.price.toLocaleString()} ${isOverBudget ? '(超過預算)' : ''}
+                  </p>
+                </div>
+              </div>
+              <span class="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-800 font-bold rounded-full">
+                總分:${item.totalWeight}
+              </span>
+            </div>
+            <button onclick="toggleCart('${item.id}')" class="w-full py-1.5 px-2 rounded-md text-xs font-semibold transition ${btnClass}">
+              ${btnText}
+            </button>
+          </div>
+        `;
+      });
+
+      lucide.createIcons();
+    }
+
+    function renderMatrixTable(processedList) {
+      const tableBody = document.getElementById("matrixTableBody");
+      tableBody.innerHTML = "";
+
+      const previewItems = processedList.slice(0, 50);
+      previewItems.forEach(item => {
+        const budgetStatus = item.fitsBudget 
+          ? `<span class="text-emerald-600 font-semibold">✓ 符合</span>` 
+          : `<span class="text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">✕ 超過預算</span>`;
+
+        tableBody.innerHTML += `
+          <tr class="border-b hover:bg-slate-50">
+            <td class="p-2 flex items-center gap-1">${item.img} ${item.name}</td>
+            <td class="p-2">NT$ ${item.price.toLocaleString()}</td>
+            <td class="p-2 text-slate-600">${item.baseWeight}</td>
+            <td class="p-2 font-bold ${item.accBoost > 0 ? 'text-amber-600' : 'text-slate-400'}">+${item.accBoost}</td>
+            <td class="p-2 font-bold text-indigo-600">${item.totalWeight}</td>
+            <td class="p-2">${budgetStatus}</td>
+          </tr>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>
